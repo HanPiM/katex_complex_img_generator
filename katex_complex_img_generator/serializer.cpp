@@ -205,6 +205,7 @@ kunit serializer::draw(
 	) {
 		x = fx(t);
 		y = fy(t);
+		//printf("(%lf %lf)\n", x, y);
 		points.emplace_back(x, y);
 	}
 
@@ -269,6 +270,8 @@ kunit serializer::draw(
 				double k = (lastp.y - p.y) / (lastp.x - p.x);
 				double b = p.y - k * p.x;
 
+				//printf("%lfx %lf", k, b);
+
 				double sxy = k * xr.begin() + b;
 				double exy = k * xr.end() + b;
 
@@ -289,6 +292,9 @@ kunit serializer::draw(
 					else if (lineseg_xr.has(ans2))drawpos.assign(ans2, yr.end());
 					else throw std::logic_error("reached the impossible branch");
 					// 可以证明不可能到达这里
+
+					//std::cout << p << "ans1:" << ans1 << " ans2:" << ans2 << '\n';
+					//std::cout << drawpos << '\n';
 				}
 			}
 		}
@@ -301,25 +307,32 @@ kunit serializer::draw(
 	double deltax, deltay;
 	point drawpos, lastdrawpos;
 
+	auto isbad = [](double x)
+	{
+		return std::isnan(x) || std::isinf(x);
+	};
+
 	size_t beg_idx = 1;
 	double offset = 0;
 	while (
 		beg_idx < points.size()
 		&& (
-			std::isnan(points[beg_idx].y)
+			isbad(points[beg_idx].y)
 			|| !points[beg_idx].in_rect(draw_range)
 			)
 		) {
 		offset += points[beg_idx].x - points[beg_idx - 1].x;
 		beg_idx++;
 	} // 跳过开头那些不符合要求的
+
+	if (beg_idx >= points.size())return 0;
 	kern(zoom_x * offset);
 
 	bool has_lastdrawpos = 0;
-	if (!std::isnan(points[beg_idx - 1].y))
+	if (!isbad(points[beg_idx - 1].y))
 	{
 		get_drawpos(points[beg_idx], points[beg_idx - 1], lastdrawpos);
-		has_lastdrawpos = !std::isnan(points[beg_idx].y);
+		has_lastdrawpos = !isbad(points[beg_idx].y);
 	}
 
 	for (size_t i = beg_idx; i < points.size(); ++i)
@@ -328,20 +341,21 @@ kunit serializer::draw(
 		const point& lastp = points[i - 1];
 
 		bool no_draw = false;
-		if (std::isnan(p.y) || std::isnan(lastp.y))
+		if (isbad(p.y) || isbad(lastp.y))
 		{
 			no_draw = true;
-			has_lastdrawpos = !std::isnan(p.y);
+			has_lastdrawpos = !isbad(p.y);
 		}
 		if (!lastp.in_rect(draw_range) && !p.in_rect(draw_range))
 		{
 			no_draw = true;
-			has_lastdrawpos = p.in_rect(draw_range);
+			has_lastdrawpos = !isbad(p.y);
 		}
 		if (no_draw)
 		{
 			// 留空不画
 			kern(zoom_x * (p.x - lastp.x));
+			//std::cout << p << " " << p.in_rect(draw_range) << '\n';
 			if (has_lastdrawpos)
 			{
 				lastdrawpos.assign(p.x - xr.begin(), p.y - yr.begin());
